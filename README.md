@@ -1,5 +1,7 @@
 # 建物年代マップ（PLATEAU 3D Tiles × 建築年）
 
+公開URL: https://onetech-jp.github.io/plateau-building-age-map/
+
 PLATEAU の建築物モデル（3D Tiles ストリーミング配信）を CesiumJS で読み込み、
 `bldg:yearOfConstruction`（建築年）で色分けする単一HTMLのビューア。ビルド不要・ダウンロード不要。
 
