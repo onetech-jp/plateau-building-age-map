@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>建物年代マップ (PLATEAU)</title>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.134/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.134/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<script src="datasets.js"></script>
+<style>
+  :root{--bg:#14171c;--bg2:#1d2128;--fg:#e6e8ec;--muted:#9aa3b2;--line:#2c323c;--accent:#4aa3ff;--unknown:#9a9a9a}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:13px}
+  #app{display:flex;height:100%}
+  #panel{width:330px;flex:0 0 330px;overflow:auto;background:var(--bg2);border-right:1px solid var(--line);padding:14px 16px 24px}
+  #cesiumContainer{flex:1;min-width:0;position:relative}
+  h1{font-size:16px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:11px;margin:0 0 12px;line-height:1.5}
+  section{border-top:1px solid var(--line);padding:10px 0}
+  section h2{font-size:12px;color:var(--muted);margin:0 0 8px;font-weight:600;letter-spacing:.04em}
+  select,input[type=number]{width:100%;background:#0f1215;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
+  .row{display:flex;gap:8px;margin-bottom:6px;align-items:center}
+  .row label{color:var(--muted);flex:0 0 auto}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .modes button{background:#0f1215;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:7px 6px;cursor:pointer;font-size:12px}
+  .modes button.active{border-color:var(--accent);background:#1a2a3d}
+  .legend{margin:8px 0 0;padding:0;list-style:none}
+  .legend li{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px}
+  .legend li span:nth-child(2){flex:1;line-height:1.3}
+  .legend .n{white-space:nowrap}
+  .modeTitle{margin:10px 0 0;font-size:12px;color:var(--fg)}
+  .modeTitle small{color:var(--muted);display:block;margin-top:2px}
+  .legend .sw{width:14px;height:14px;border-radius:3px;flex:0 0 14px;border:1px solid rgba(255,255,255,.15)}
+  .legend .n{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+  .stat{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;padding:2px 0}
+  .stat b{color:var(--fg);font-variant-numeric:tabular-nums}
+  .chk{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:#0f1215}
+  .chk label{display:flex;gap:4px;align-items:center;font-size:12px;cursor:pointer}
+  .note{color:var(--muted);font-size:11px;line-height:1.5;margin-top:6px}
+  .note a{color:var(--accent)}
+  #status{z-index:3;position:absolute;left:12px;bottom:36px;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none}
+  #info{z-index:3;position:absolute;right:12px;top:12px;width:300px;max-height:70%;overflow:auto;background:rgba(20,23,28,.94);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:none}
+  #info h3{margin:0 0 6px;font-size:14px}
+  #info table{width:100%;border-collapse:collapse;font-size:12px}
+  #info td{padding:3px 0;vertical-align:top;border-top:1px solid var(--line)}
+  #info td:first-child{color:var(--muted);width:38%}
+  #info .close{position:absolute;right:10px;top:8px;background:none;border:0;color:var(--muted);font-size:16px;cursor:pointer}
+  #toggle{display:none;position:absolute;left:12px;top:12px;z-index:5;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+  #panelClose{display:none;position:absolute;right:10px;top:10px;background:none;border:0;color:var(--muted);font-size:20px;cursor:pointer}
+  #miniLegend{display:none;position:absolute;left:12px;right:12px;bottom:70px;z-index:3;background:rgba(20,23,28,.9);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11px}
+  #miniLegend .t{font-weight:600;margin-bottom:4px}
+  #miniLegend .items{display:flex;flex-wrap:wrap;gap:3px 12px}
+  #miniLegend .items span{display:inline-flex;align-items:center;gap:5px}
+  #miniLegend .sw{width:10px;height:10px;border-radius:2px;border:1px solid rgba(255,255,255,.15)}
+  .cesium-viewer-bottom{font-size:10px}
+  @media (max-width:760px){
+    #panel{position:absolute;z-index:6;height:100%;width:min(330px,88vw);flex-basis:auto;transform:translateX(-100%);transition:transform .2s;padding-top:18px}
+    #panelClose{display:block}
+    #miniLegend{display:block}
+    #panel.open{transform:none}
+    #toggle{display:block}
+    #info{width:calc(100% - 24px)}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <button id="panelClose" aria-label="閉じる">×</button>
+    <h1>建物年代マップ</h1>
+    <p class="sub">PLATEAU 建築物モデル（3D Tiles配信）を建築年で色分け。データは国交省 Project PLATEAU（CC BY 4.0相当・商用可）。</p>
+
+    <section>
+      <h2>地域</h2>
+      <div class="row"><label>都道府県</label><select id="pref"></select></div>
+      <div class="row"><label>市区町村</label><select id="city"></select></div>
+      <div class="row"><label><input type="checkbox" id="lod2"> LOD2（屋根形状あり・重い）</label></div>
+      <p class="note">建築年を持つ自治体のみ一覧化（<span id="nDatasets"></span>件）。東京23区・横浜・川崎・相模原は公開データに建築年が含まれないため対象外。</p>
+    </section>
+
+    <section>
+      <h2>色分け</h2>
+      <div class="modes">
+        <button data-mode="taishin">耐震区分</button>
+        <button data-mode="age">築年数（改修期）</button>
+        <button data-mode="decade">年代グラデ</button>
+        <button data-mode="target">ターゲット抽出</button>
+      </div>
+      <div id="targetOpts" style="display:none;margin-top:8px">
+        <div class="row"><label>築</label><input type="number" id="tAge" value="30" min="0" step="5" style="width:70px"><label>年以上</label>
+          <label style="margin-left:8px">高さ</label><input type="number" id="tHeight" value="0" min="0" step="5" style="width:70px"><label>m以上</label></div>
+        <div class="chk" id="tUsage"></div>
+        <p class="note">条件に合う建物を強調し、他は薄く表示。用途は PLATEAU の建物用途分類。</p>
+      </div>
+      <p class="modeTitle" id="modeTitle"></p>
+      <ul class="legend" id="legend"></ul>
+      <div class="row" style="margin-top:8px"><label><input type="checkbox" id="hideUnknown"> 建築年不明を非表示</label></div>
+    </section>
+
+    <section>
+      <h2>読み込み済み建物の集計</h2>
+      <div class="stat"><span>読込棟数</span><b id="sTotal">0</b></div>
+      <div class="stat"><span>建築年あり</span><b id="sKnown">0</b></div>
+      <div class="stat"><span>建築年あり率</span><b id="sRate">–</b></div>
+      <p class="note">表示範囲で読み込んだタイル分の集計（同一建物は1回）。ズームアウトすると増えます。</p>
+    </section>
+
+    <section>
+      <h2>背景</h2>
+      <select id="basemap">
+        <option value="pale">地理院 淡色地図</option>
+        <option value="photo">地理院 航空写真</option>
+        <option value="none">無地（白）</option>
+      </select>
+    </section>
+
+    <section>
+      <p class="note">出典: <a href="https://www.mlit.go.jp/plateau/" target="_blank">Project PLATEAU</a>（国土交通省）/ 建築年は都市計画基礎調査由来。年の値「1」または欠損は不明扱い。<br>
+      耐震区分は建築年のみで判定（1981年6月以前が旧耐震のため、1981年築は暫定的に旧耐震側に含めています）。</p>
+    </section>
+  </aside>
+
+  <div id="cesiumContainer">
+    <button id="toggle">☰ 設定</button>
+    <div id="status">初期化中…</div>
+    <div id="miniLegend"><div class="t" id="miniTitle"></div><div class="items" id="miniItems"></div></div>
+    <div id="info"><button class="close" id="infoClose">×</button><h3 id="infoTitle"></h3><table id="infoTable"></table></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const DATASETS = window.PLATEAU_DATASETS || [];
+  const NOW = new Date().getFullYear();
+  const Y = "${feature['bldg:yearOfConstruction']}";
+  const U = "${feature['bldg:usage']}";
+  const H = "${feature['bldg:measuredHeight']}";
+  const UNKNOWN_EXPR = `(${Y} === undefined || ${Y} === null || Number(${Y}) < 1000)`;
+  const UNKNOWN_COLOR = "rgba(150,150,150,0.35)";
+  const DIM_COLOR = "rgba(120,120,120,0.18)";
+
+  const USAGES = ["業務施設","商業施設","商業系複合施設","宿泊施設","共同住宅","店舗等併用共同住宅","住宅","店舗等併用住宅","作業所併用住宅","官公庁施設","文教厚生施設","運輸倉庫施設","工場","供給処理施設","農林漁業用施設","その他","不明"];
+  const DEFAULT_USAGES = new Set(["業務施設","商業施設","商業系複合施設","宿泊施設"]);
+
+  // ---- モード定義: classes = [{label,color,test(year,usage,height),expr}] 上から順に評価 ----
+  const MODES = {
+    taishin: {
+      title: "耐震区分（建築年ベース）", hint: "赤＝1981年以前の旧耐震。耐震改修・建替の対象",
+      classes: [
+        {label:"〜1981年 旧耐震", color:"#d7301f", test:(y)=>y<=1981, expr:`Number(${Y}) <= 1981`},
+        {label:"1982〜2000年 新耐震（2000年基準前）", color:"#fdae61", test:(y)=>y<=2000, expr:`Number(${Y}) <= 2000`},
+        {label:"2001年〜 現行基準", color:"#1a9850", test:()=>true, expr:"true"},
+      ]
+    },
+    age: {
+      title: `築年数（${NOW}年基準）`, hint: "濃い赤ほど古い。築30年超は配管・空調の更新期",
+      classes: [
+        {label:"築50年以上（建替検討期）", color:"#7f0000", test:(y)=>NOW-y>=50, expr:`Number(${Y}) <= ${NOW-50}`},
+        {label:"築30〜49年（設備・配管更新期）", color:"#d7301f", test:(y)=>NOW-y>=30, expr:`Number(${Y}) <= ${NOW-30}`},
+        {label:"築15〜29年（外壁・防水改修期）", color:"#fdae61", test:(y)=>NOW-y>=15, expr:`Number(${Y}) <= ${NOW-15}`},
+        {label:"築15年未満", color:"#1a9850", test:()=>true, expr:"true"},
+      ]
+    },
+    decade: {
+      title: "建築年代", hint: "赤系＝昭和、青系＝2000年以降。街の更新サイクルが見える",
+      classes: [
+        {label:"〜1960年代", color:"#67001f", test:(y)=>y<1970, expr:`Number(${Y}) < 1970`},
+        {label:"1970年代", color:"#b2182b", test:(y)=>y<1980, expr:`Number(${Y}) < 1980`},
+        {label:"1980年代", color:"#d6604d", test:(y)=>y<1990, expr:`Number(${Y}) < 1990`},
+        {label:"1990年代", color:"#f4a582", test:(y)=>y<2000, expr:`Number(${Y}) < 2000`},
+        {label:"2000年代", color:"#92c5de", test:(y)=>y<2010, expr:`Number(${Y}) < 2010`},
+        {label:"2010年代", color:"#4393c3", test:(y)=>y<2020, expr:`Number(${Y}) < 2020`},
+        {label:"2020年代", color:"#2166ac", test:()=>true, expr:"true"},
+      ]
+    },
+    target: { title: "ターゲット抽出", hint: "条件に合う建物だけをピンクで強調", classes: [] } // 動的生成
+  };
+
+  function targetClasses(){
+    const age = Number(document.getElementById('tAge').value)||0;
+    const hmin = Number(document.getElementById('tHeight').value)||0;
+    const usages = [...document.querySelectorAll('#tUsage input:checked')].map(i=>i.value);
+    const useCond = usages.length ? "(" + usages.map(u=>`${U} === '${u}'`).join(" || ") + ")" : "false";
+    const hCond = hmin>0 ? `(${H} !== undefined && Number(${H}) >= ${hmin})` : "true";
+    const expr = `Number(${Y}) <= ${NOW-age} && ${useCond} && ${hCond}`;
+    const test = (y,u,h)=> (NOW-y>=age) && usages.includes(u) && (hmin>0 ? (h!==undefined && h!==null && h>=hmin) : true);
+    return [
+      {label:`築${age}年以上 × ${usages.length?usages.join('/'):'(用途未選択)'}${hmin>0?` × 高さ${hmin}m以上`:''}`, color:"#ff2d95", test, expr},
+      {label:"条件外", color:DIM_COLOR, test:()=>true, expr:"true", dim:true},
+    ];
+  }
+
+  // ---- state ----
+  let mode = 'taishin';
+  let tileset = null;
+  let current = null;
+  const feats = new Map(); // gml_id -> {y,u,h}
+  let statTimer = null;
+
+  // ---- viewer ----
+  const gsi = (layer, ext)=> new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({
+    url: `https://cyberjapandata.gsi.go.jp/xyz/${layer}/{z}/{x}/{y}.${ext}`, minimumLevel: 5, maximumLevel: 18,
+    rectangle: Cesium.Rectangle.fromDegrees(122.0, 20.0, 154.0, 46.0),
+    credit: new Cesium.Credit('<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>')
+  }));
+  const viewer = new Cesium.Viewer('cesiumContainer', {
+    baseLayer: gsi('pale','png'),
+    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+    animation:false, timeline:false, geocoder:false, baseLayerPicker:false, sceneModePicker:false,
+    navigationHelpButton:false, homeButton:false, fullscreenButton:false, infoBox:false, selectionIndicator:false,
+    requestRenderMode:false
+  });
+  Cesium.CreditDisplay.cesiumCredit = new Cesium.Credit('<a href="https://cesium.com/platform/cesiumjs/" target="_blank">CesiumJS</a>');
+  viewer.scene.globe.baseColor = Cesium.Color.WHITE;
+  window.__app = { viewer, get tileset(){ return tileset; }, get feats(){ return feats; } };
+  viewer.scene.globe.depthTestAgainstTerrain = false;
+  viewer.scene.skyAtmosphere.show = false;
+  viewer.creditDisplay.addStaticCredit(new Cesium.Credit('<a href="https://www.mlit.go.jp/plateau/" target="_blank">Project PLATEAU (国土交通省)</a>'));
+
+  // ---- style ----
+  function buildStyle(){
+    const classes = mode==='target' ? targetClasses() : MODES[mode].classes;
+    const hideUnknown = document.getElementById('hideUnknown').checked;
+    const conditions = [[UNKNOWN_EXPR, `color('${UNKNOWN_COLOR}')`]];
+    for (const c of classes) conditions.push([c.expr, `color('${c.color}')`]);
+    const style = { color: { conditions } };
+    if (hideUnknown) style.show = `!${UNKNOWN_EXPR}`;
+    return new Cesium.Cesium3DTileStyle(style);
+  }
+  function applyStyle(){
+    if (tileset) tileset.style = buildStyle();
+    renderLegend();
+  }
+
+  // ---- legend & stats ----
+  function classify(rec, classes){
+    for (const c of classes) if (c.test(rec.y, rec.u, rec.h)) return c;
+    return classes[classes.length-1];
+  }
+  function renderLegend(){
+    const classes = mode==='target' ? targetClasses() : MODES[mode].classes;
+    const counts = new Map(classes.map(c=>[c,0]));
+    let known=0, unknown=0;
+    for (const rec of feats.values()){
+      if (rec.y==null || rec.y<1000){ unknown++; continue; }
+      known++;
+      const c = classify(rec, classes); counts.set(c, counts.get(c)+1);
+    }
+    const total = known+unknown;
+    const pct = n => total ? ` (${(100*n/total).toFixed(1)}%)` : '';
+    const M = MODES[mode];
+    document.getElementById('modeTitle').innerHTML = `${M.title}<small>${M.hint}</small>`;
+    document.getElementById('miniTitle').textContent = M.hint;
+    document.getElementById('miniItems').innerHTML = classes.map(c=>`<span><i class="sw" style="background:${c.color}"></i>${c.label}</span>`).join('') + `<span><i class="sw" style="background:${UNKNOWN_COLOR}"></i>不明</span>`;
+    const ul = document.getElementById('legend'); ul.innerHTML='';
+    for (const c of classes){
+      const li=document.createElement('li');
+      li.innerHTML=`<span class="sw" style="background:${c.color}"></span><span>${c.label}</span><span class="n">${counts.get(c).toLocaleString()}${pct(counts.get(c))}</span>`;
+      ul.appendChild(li);
+    }
+    const li=document.createElement('li');
+    li.innerHTML=`<span class="sw" style="background:${UNKNOWN_COLOR}"></span><span>建築年不明</span><span class="n">${unknown.toLocaleString()}${pct(unknown)}</span>`;
+    ul.appendChild(li);
+    document.getElementById('sTotal').textContent = total.toLocaleString();
+    document.getElementById('sKnown').textContent = known.toLocaleString();
+    document.getElementById('sRate').textContent = total ? (100*known/total).toFixed(1)+'%' : '–';
+  }
+  function scheduleStats(){ if (statTimer) return; statTimer=setTimeout(()=>{statTimer=null; renderLegend();}, 400); }
+
+  function harvest(content){
+    if (!content || typeof content.featuresLength!=='number') return;
+    for (let i=0;i<content.featuresLength;i++){
+      const f = content.getFeature(i);
+      const id = f.getProperty('gml_id') || f.getProperty('gml:id') || (content.url+'#'+i);
+      if (feats.has(id)) continue;
+      let y = f.getProperty('bldg:yearOfConstruction'); y = (y===undefined||y===null||y==='') ? null : Number(y);
+      if (Number.isNaN(y)) y=null;
+      let h = f.getProperty('bldg:measuredHeight'); h = (h===undefined||h===null) ? null : Number(h);
+      feats.set(id, {y, u: f.getProperty('bldg:usage'), h});
+    }
+    if (content.innerContents) content.innerContents.forEach(harvest);
+  }
+
+  // ---- dataset loading ----
+  async function loadDataset(ds){
+    current = ds;
+    const useLod2 = document.getElementById('lod2').checked && ds.lod2;
+    const url = useLod2 ? ds.lod2 : ds.lod1;
+    setStatus(`${ds.pref} ${ds.city}${ds.ward?' '+ds.ward:''} を読み込み中…`);
+    if (tileset){ viewer.scene.primitives.remove(tileset); tileset=null; }
+    feats.clear(); renderLegend(); hideInfo();
+    try{
+      const ts = await Cesium.Cesium3DTileset.fromUrl(url, { maximumScreenSpaceError: 12, skipLevelOfDetail: false });
+      tileset = ts;
+      ts.style = buildStyle();
+      ts.tileLoad.addEventListener(tile=>{ harvest(tile.content); scheduleStats(); });
+      ts.allTilesLoaded.addEventListener(()=>{ renderLegend(); setStatus(`${ds.pref} ${ds.city}${ds.ward?' '+ds.ward:''}（${useLod2?'LOD2':'LOD1'}・${ds.year}年度）　建物をクリックで詳細`); });
+      viewer.scene.primitives.add(ts);
+      const sphere = ts.boundingSphere;
+      const range = Cesium.Math.clamp(sphere.radius * 1.6, 3500, 12000);
+      viewer.camera.flyToBoundingSphere(sphere, { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), range), duration: 1.2 });
+      setStatus(`${ds.pref} ${ds.city}${ds.ward?' '+ds.ward:''}（${useLod2?'LOD2':'LOD1'}・${ds.year}年度）`);
+      location.hash = `city=${ds.cityCode}${ds.wardCode?'-'+ds.wardCode:''}&mode=${mode}`;
+    }catch(e){ console.error(e); setStatus('読み込みに失敗: '+e.message); }
+  }
+  function setStatus(t){ document.getElementById('status').textContent=t; }
+
+  // ---- selectors ----
+  const prefSel=document.getElementById('pref'), citySel=document.getElementById('city');
+  document.getElementById('nDatasets').textContent = DATASETS.length;
+  const prefs=[]; for (const d of DATASETS) if(!prefs.some(p=>p.code===d.prefCode)) prefs.push({code:d.prefCode,name:d.pref});
+  for (const p of prefs){ const o=document.createElement('option'); o.value=p.code; o.textContent=p.name; prefSel.appendChild(o); }
+  function fillCities(prefCode, selectKey){
+    citySel.innerHTML='';
+    for (const d of DATASETS.filter(d=>d.prefCode===prefCode)){
+      const o=document.createElement('option'); o.value=d.cityCode+(d.wardCode?'-'+d.wardCode:''); o.textContent=d.city+(d.ward?' '+d.ward:'')+(d.lod2?'':' (LOD1のみ)'); citySel.appendChild(o);
+    }
+    if (selectKey) citySel.value=selectKey;
+  }
+  function selectedDataset(){ return DATASETS.find(d=>d.cityCode+(d.wardCode?'-'+d.wardCode:'')===citySel.value); }
+  prefSel.addEventListener('change',()=>{ fillCities(prefSel.value); onCity(); });
+  citySel.addEventListener('change',onCity);
+  document.getElementById('lod2').addEventListener('change',()=>{ if(current) loadDataset(current); });
+  function onCity(){ const ds=selectedDataset(); if(!ds) return; document.getElementById('lod2').disabled=!ds.lod2; if(!ds.lod2) document.getElementById('lod2').checked=false; loadDataset(ds); }
+
+  // ---- mode buttons ----
+  document.querySelectorAll('.modes button').forEach(b=>b.addEventListener('click',()=>{
+    mode=b.dataset.mode;
+    document.querySelectorAll('.modes button').forEach(x=>x.classList.toggle('active',x===b));
+    document.getElementById('targetOpts').style.display = mode==='target'?'block':'none';
+    applyStyle();
+    if (current) location.hash = `city=${current.cityCode}${current.wardCode?'-'+current.wardCode:''}&mode=${mode}`;
+  }));
+  const tu=document.getElementById('tUsage');
+  for (const u of USAGES){ const l=document.createElement('label'); l.innerHTML=`<input type="checkbox" value="${u}" ${DEFAULT_USAGES.has(u)?'checked':''}> ${u}`; tu.appendChild(l); }
+  ['tAge','tHeight'].forEach(id=>document.getElementById(id).addEventListener('input',applyStyle));
+  tu.addEventListener('change',applyStyle);
+  document.getElementById('hideUnknown').addEventListener('change',applyStyle);
+
+  // ---- basemap ----
+  document.getElementById('basemap').addEventListener('change',e=>{
+    viewer.imageryLayers.removeAll();
+    if (e.target.value==='pale') viewer.imageryLayers.add(gsi('pale','png'));
+    else if (e.target.value==='photo') viewer.imageryLayers.add(gsi('seamlessphoto','jpg'));
+  });
+
+  // ---- picking ----
+  let picked=null, pickedColor=null;
+  function hideInfo(){ document.getElementById('info').style.display='none'; if(picked){ try{picked.color=pickedColor;}catch(_){} picked=null; } }
+  document.getElementById('infoClose').addEventListener('click',hideInfo);
+  const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  handler.setInputAction(m=>{
+    const p = viewer.scene.pick(m.position);
+    if (!(p instanceof Cesium.Cesium3DTileFeature)){ hideInfo(); return; }
+    hideInfo();
+    picked=p; pickedColor=Cesium.Color.clone(p.color); p.color=Cesium.Color.CYAN;
+    const g = k => { const v=p.getProperty(k); return (v===undefined||v===null||v==='')?null:v; };
+    const y = Number(g('bldg:yearOfConstruction'));
+    const yearTxt = (y && y>=1000) ? `${y}年（築${NOW-y}年）` : '不明';
+    const rows = [
+      ['建築年', yearTxt],
+      ['用途', g('bldg:usage')],
+      ['高さ', g('bldg:measuredHeight')!=null ? Number(g('bldg:measuredHeight')).toFixed(1)+' m' : null],
+      ['地上階数', g('bldg:storeysAboveGround')],
+      ['構造', g('uro:BuildingDetailAttribute_uro:buildingStructureType')],
+      ['耐火構造', g('uro:BuildingDetailAttribute_uro:fireproofStructureType')],
+      ['延床面積', g('uro:BuildingDetailAttribute_uro:totalFloorArea')!=null ? Number(g('uro:BuildingDetailAttribute_uro:totalFloorArea')).toLocaleString()+' ㎡' : null],
+      ['用途地域', g('uro:BuildingDetailAttribute_uro:districtsAndZonesType')],
+      ['住所', g('bldg:address')],
+      ['建物ID', g('uro:BuildingIDAttribute_uro:buildingID')],
+    ].filter(r=>r[1]!=null);
+    document.getElementById('infoTitle').textContent = g('gml:name') || g('uro:LargeCustomerFacilityAttribute_uro:name') || '建物';
+    document.getElementById('infoTable').innerHTML = rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+    document.getElementById('info').style.display='block';
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  document.getElementById('toggle').addEventListener('click',()=>document.getElementById('panel').classList.toggle('open'));
+  document.getElementById('panelClose').addEventListener('click',()=>document.getElementById('panel').classList.remove('open'));
+  citySel.addEventListener('change',()=>document.getElementById('panel').classList.remove('open'));
+  function setMode(m){ if(!MODES[m]) return; mode=m; document.querySelectorAll('.modes button').forEach(x=>x.classList.toggle('active',x.dataset.mode===m)); document.getElementById('targetOpts').style.display = m==='target'?'block':'none'; applyStyle(); }
+  window.addEventListener('hashchange',()=>{
+    const q=new URLSearchParams(location.hash.slice(1)); const m=q.get('mode'), c=q.get('city');
+    if (m && m!==mode) setMode(m);
+    if (c && current && c!==current.cityCode+(current.wardCode?'-'+current.wardCode:'')){ const ds=DATASETS.find(d=>d.cityCode+(d.wardCode?'-'+d.wardCode:'')===c); if(ds){ prefSel.value=ds.prefCode; fillCities(ds.prefCode,c); document.getElementById('lod2').disabled=!ds.lod2; loadDataset(ds);} }
+  });
+
+  // ---- init from hash ----
+  const params = new URLSearchParams(location.hash.slice(1));
+  const initKey = params.get('city') || '11224'; // 既定: 埼玉県戸田市（東京都板橋区・北区に隣接）
+  const initMode = params.get('mode'); if (initMode && MODES[initMode]) mode=initMode;
+  document.querySelector(`.modes button[data-mode="${mode}"]`).classList.add('active');
+  document.getElementById('targetOpts').style.display = mode==='target'?'block':'none';
+  const initDs = DATASETS.find(d=>d.cityCode+(d.wardCode?'-'+d.wardCode:'')===initKey) || DATASETS[0];
+  prefSel.value = initDs.prefCode; fillCities(initDs.prefCode, initKey);
+  document.getElementById('lod2').disabled=!initDs.lod2;
+  renderLegend();
+  loadDataset(initDs);
+})();
+</script>
+</body>
+</html>
