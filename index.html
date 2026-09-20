@@ -81,7 +81,7 @@
     <section>
       <h2>色分け</h2>
       <div class="modes">
-        <button data-mode="taishin">耐震区分</button>
+        <button data-mode="taishin">耐震基準の目安</button>
         <button data-mode="age">築年数（改修期）</button>
         <button data-mode="decade">年代グラデ</button>
         <button data-mode="target">ターゲット抽出</button>
@@ -145,10 +145,10 @@
   // ---- モード定義: classes = [{label,color,test(year,usage,height),expr}] 上から順に評価 ----
   const MODES = {
     taishin: {
-      title: "耐震区分（建築年ベース）", hint: "赤＝1981年以前の旧耐震。耐震改修・建替の対象",
+      title: "耐震基準の目安（建築年のみで判定）", hint: "赤＝1981年以前の旧耐震。2000年の境目は主に木造住宅の基準",
       classes: [
         {label:"〜1981年 旧耐震", color:"#d7301f", test:(y)=>y<=1981, expr:`Number(${Y}) <= 1981`},
-        {label:"1982〜2000年 新耐震（2000年基準前）", color:"#fdae61", test:(y)=>y<=2000, expr:`Number(${Y}) <= 2000`},
+        {label:"1982〜2000年 新耐震（2000年の木造基準前）", color:"#fdae61", test:(y)=>y<=2000, expr:`Number(${Y}) <= 2000`},
         {label:"2001年〜 現行基準", color:"#1a9850", test:()=>true, expr:"true"},
       ]
     },
